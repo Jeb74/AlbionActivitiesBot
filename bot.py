@@ -15,7 +15,7 @@ import os
 from dotenv import load_dotenv
 
 from activity import Activity
-from activityview import ActivityView
+from activityview import ActivityView, RUNNING_ACTIVITIES
 from splits import MenuView
 
 DIFFERENCE = {
@@ -36,8 +36,9 @@ DIFFERENCE = {
 class AABot(discord.ext.commands.Bot):
 
     def __init__(self):
-        load_dotenv(".env")
-        self.___token = str(os.getenv("DISCORD_TOKEN"))
+        with open("token.txt", "r") as file:
+            self.___token = file.read()
+
         intents = discord.Intents.all()
         intents.message_content = True
         self.___restricted_channels: dict[str:list[int]] = {}
