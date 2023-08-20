@@ -11,6 +11,8 @@ import pytz
 from discord import app_commands
 from discord.app_commands import CheckFailure
 from discord.ext import commands
+import os
+from dotenv import load_dotenv
 
 from activity import Activity
 from activityview import ActivityView
@@ -34,7 +36,8 @@ DIFFERENCE = {
 class AABot(discord.ext.commands.Bot):
 
     def __init__(self):
-        self.___token = "MTE0MDI5MjMxNzMwNDA2MjE0Mw.GkOx4U.wqgxikbX1zhJgQ_q6FfuffPXEsu1XMU5snpxQI"
+        load_dotenv(".env")
+        self.___token = str(os.getenv("DISCORD_TOKEN"))
         intents = discord.Intents.all()
         intents.message_content = True
         self.___restricted_channels: dict[str:list[int]] = {}
