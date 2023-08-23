@@ -11,11 +11,10 @@ import pytz
 from discord import app_commands
 from discord.app_commands import CheckFailure
 from discord.ext import commands
-import os
-from dotenv import load_dotenv
 
 from activity import Activity
-from activityview import ActivityView, RUNNING_ACTIVITIES
+from activityview import ActivityView
+from data import RUNNING_ACTIVITIES
 from splits import MenuView
 
 DIFFERENCE = {
@@ -165,48 +164,35 @@ class AABot(discord.ext.commands.Bot):
             guild_id: int = interaction.guild.id                        # Getting guild id
             ch_id: int = interaction.channel_id                         # Getting channel id
 
-            a = Activity(user_id, wtd, mnp, mxp, time_, difference)
-            await interaction.channel.send(embed=a.to_embed(), view=ActivityView(mnp, mxp, status, a))
+            a = Activity(author=user_id, _type=wtd, mnp=mnp, mxp=mxp, creation_time=time_, difference=difference)
+            await interaction.channel.send(embed=a.to_embed(), view=ActivityView(a))
 
             msg_id = interaction.guild.get_channel(interaction.channel.id).last_message.id                # Getting last message (this) id
             RUNNING_ACTIVITIES[msg_id] = a
             a.set_creation_msg(msg_id)
 
-            asyncio.ensure_future(self.cct(guild_id, ch_id, start_after, status, a))
+            asyncio.ensure_future(self.cct(guild_id, ch_id, a))
             await interaction.response.send_message("Activity created successfully.", ephemeral=True, delete_after=10)
 
     #######################################################################
     #            SUPPORT METHODS
     #######################################################################
 
-    async def cct(self, g_id: int, c_id: int, start_at: str, active: list[bool], a: Activity): # create conditioned timeout
+    async def cct(self, g_id: int, c_id: int, a: Activity): # create conditioned timeout
         global RUNNING_ACTIVITIES
-        plustime = {
-            "now": 10,
-            "20m": 20 * 60,
-            "1h": 60 * 60,
-            "2h": 60 * 60 * 2,
-            "3h": 60 * 60 * 3,
-            "4h": 60 * 60 * 4,
-            "5h": 60 * 60 * 5,
-            "6h": 60 * 60 * 6,
-            "7h": 60 * 60 * 7,
-            "8h": 60 * 60 * 8,
-            "1d": 60 * 60 * 24
-        }[start_at]
-        await sleep(plustime)
-        if not a.reached_min():
-            message = await self.get_guild(g_id).get_channel(c_id).fetch_message(a.get_creation_msg())
-            await message.delete()
-            RUNNING_ACTIVITIES.pop(a.get_creation_msg())
-            del a
-            return
-        else:
-            active[0] = False
-        await self.create_split(g_id, a)
+        await sleep(int((a.get_starting_time() - a.get_creation_time()).total_seconds()))
+        try:
+            if a in RUNNING_ACTIVITIES.values():
+                if not a.reached_min():
+                    message = await self.get_guild(g_id).get_channel(c_id).fetch_message(a.get_creation_msg())
+                    await message.delete()
+                    RUNNING_ACTIVITIES.pop(a.get_creation_msg())
+                    return
+                await self.create_split(g_id, a)
+        except Exception as e:
+            del e
 
     async def create_split(self, g_id: int, a: Activity):
-        a.get_creation_msg()
         split = self.___split_channels.get(str(g_id))                       # Getting information from split table
         ch = self.get_guild(g_id).get_channel(split)                        # Getting where to send the split and the number of splits
         await ch.send(embed=a.to_embed(), view=MenuView(a))
@@ -217,3 +203,4 @@ class AABot(discord.ext.commands.Bot):
 
     def begin(self):
         super().run(self.___token)
+

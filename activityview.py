@@ -4,67 +4,64 @@ from datetime import datetime
 
 import discord.ui
 import pytz
+from discord.ui import Button
 
 from activity import Activity
+from data import RUNNING_ACTIVITIES
 
-RUNNING_ACTIVITIES: dict[int: Activity] = {}
 
 class MenuView(discord.ui.View):
-    def __init__(self, mmsg):
+    def __init__(self, activity, msg, user):
         super().__init__()
-        self.mmsg_id = mmsg
+        self.msg_id = msg
+        self.a: Activity = activity
+        self.user = user
+        self._oninit_register()
 
-    @discord.ui.button()
-    async def register(self, interaction: discord.Interaction, button: discord.ui.Button):
-        global RUNNING_ACTIVITIES
-        a: Activity = RUNNING_ACTIVITIES.get(self.mmsg_id)
-        if a.reached_max() and button.label == "Register":
-            await interaction.response.send_message("Sorry, something went wrong.", ephemeral=True, delete_after=15)
-            return
-        time = datetime.now(tz=pytz.timezone("Europe/Rome"))
-        if button.label == "Register":
-            a.add_participant(interaction.user.id, time)
-        elif button.label == "Unregister":
-            a.remove_participant(interaction.user.id)
-        await self.update_participants(a, interaction.channel_id, interaction.guild)
-        await interaction.response.send_message("Operation ended successfully.", ephemeral=True, delete_after=15)
+    def _oninit_register(self):
+        registrable = self.user not in [i[0] for i in self.a.get_participants()]
+        btn = Button(
+            label="Register" if registrable else "Unregister",
+            disabled=registrable and self.a.reached_max() or self.a.is_started(),
+            style=discord.ButtonStyle.green if registrable else discord.ButtonStyle.red
+        )
 
-    async def update_participants(self, a: Activity, channel, guild):
-        message: discord.Message = await guild.get_channel(channel).fetch_message(self.mmsg_id)
-        embed = a.to_embed()
-        await message.edit(embed=embed)
+        async def register(interaction: discord.Interaction):
+            if registrable and not self.a.reached_max():
+                time = datetime.now(tz=pytz.timezone("Europe/Rome"))
+                self.a.add_participant(self.user, time)
+            elif not registrable:
+                self.a.remove_participant(self.user)
+            else:
+                await interaction.response.send_message("This activity reached the maximum number of participants.", ephemeral=True, delete_after=15)
+            message: discord.Message = await interaction.channel.fetch_message(self.msg_id)
+            await message.edit(embed=self.a.to_embed())
+            await interaction.response.send_message("Operation ended successfully.", ephemeral=True, delete_after=15)
+        btn.callback = register
+        self.add_item(btn)
 
 
 class ActivityView(discord.ui.View):
-    def __init__(self, mnp: int, mxp: int | str, active: list[bool], activity: Activity):
+    def __init__(self, activity: Activity):
         super().__init__(timeout=None)
-        self.mnp: int = mnp
-        self.mxp = mxp
-        self.active = active
-        self.___activity = activity
+        self.___a = activity
 
     @discord.ui.button(label="Open Menu", style=discord.ButtonStyle.gray)
     async def open_menu(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = await self.build_register_button(interaction)
-        if not self.active[0]:
-            btn = view.children[0]
-            btn.disabled = True
-        await interaction.response.send_message(view=view, ephemeral=True, delete_after=15)
+        msg_id = interaction.message.id
+        user_id = interaction.user.id
+        await interaction.response.send_message(view=MenuView(self.___a, msg_id, user_id), ephemeral=True, delete_after=15)
 
-#######################################################################
-#            SUPPORT METHODS
-#######################################################################
-
-    async def build_register_button(self, interaction: discord.Interaction):
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red)
+    async def cancel(self, interaction: discord.Interaction, button:discord.ui.Button):
+        if interaction.user.id != self.___a.get_author():
+            await interaction.response.send_message("You can't do that. You are not the author of this activity.", ephemeral=True, delete_after=15)
+            return
+        if self.___a.is_started():
+            await interaction.response.send_message("You can't do that. The activity is already started.", ephemeral=True, delete_after=15)
+            return
         global RUNNING_ACTIVITIES
-        init_desc = interaction.message.embeds[0].fields[5].value.split("\n")
-        view = MenuView(interaction.message.id)
-        btn: discord.ui.Button = view.children[0]
-        _id = interaction.user.id
-        a: Activity = RUNNING_ACTIVITIES.get(interaction.message.id)
-        participants = [i[0] for i in a.get_participants()]
-        btn.label = "Unregister" if _id in participants else "Register"
-        btn.style = discord.ButtonStyle.green if btn.label == "Register" else discord.ButtonStyle.red
-        btn.disabled = a.reached_max() and _id not in participants
-        return view
+        RUNNING_ACTIVITIES.pop(self.___a.get_creation_msg())
+        await interaction.response.send_message("Activity cancelled.", ephemeral=True, delete_after=15)
+        await interaction.message.delete()
 

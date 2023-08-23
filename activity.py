@@ -9,12 +9,13 @@ ACTIVITY_COLOR = {
     "Hellgate": discord.Color(6578786)
 }
 
+
 class Activity:
-    def __init__(self, _author: int, _type: str, _mnp: int, _mxp: int, creation_time: datetime, difference: timedelta):
-        self.___author: int = _author
+    def __init__(self, *, author: int = None, _type: str = None, mnp: int = None, mxp: int = None, creation_time: datetime = None, difference: timedelta = None):
+        self.___author: int = author
         self.___type: str = _type
-        self.___mnp: int = _mnp
-        self.___mxp: int = _mxp
+        self.___mnp: int = mnp
+        self.___mxp: int = mxp
         self.___participants: list[tuple[int:datetime]] = [(self.___author, creation_time)]
         self.___creation_time: datetime = creation_time
         self.___starts_at: datetime = creation_time + difference
@@ -23,15 +24,21 @@ class Activity:
         self.___profit = "?"
         self.___ltb = "?"
         self.___is_closed: bool = False
+        self.___closed_at: datetime = None
+        # GUILD, CHANNEL, MESSAGE
+        self.___guild: int = None
+        self.___creation_channel: int = None
         self.___creation_msg_id: int = None
         self.___split_msg_id: int = None
-        self.___closed_at: datetime = None
 
     def set_creation_msg(self, msg_id):
         self.___creation_msg_id = msg_id
 
     def set_split_msg(self, msg_id):
         self.___split_msg_id = msg_id
+
+    def is_started(self):
+        return (self.___starts_at - datetime.now(pytz.timezone("Europe/Rome"))).total_seconds() < 0
 
     def get_creation_msg(self):
         return self.___creation_msg_id
@@ -42,7 +49,7 @@ class Activity:
     def add_participant(self, _id: int, time: datetime):
         self.___participants.append((_id, time))
 
-    def remove_participant(self, _id):
+    def remove_participant(self, _id: int):
         for i in range(len(self.___participants)):
             if self.___participants[i][0] == _id:
                 self.___participants.pop(i)
@@ -103,7 +110,16 @@ class Activity:
     def set_loot_table(self, table: str):
         self.___ltb = table
 
-    def to_dict(self):
+    def set_guild(self, guild: int):
+        self.___guild = guild
+
+    def set_channel(self, channel: int):
+        self.___creation_channel = channel
+
+    def get_id(self):
+        return hash((self.___guild, self.___creation_channel, self.___creation_msg_id))
+
+    def __dict__(self):
         return {i.removeprefix("___"): getattr(self, i) for i in dir(Activity) if i.startswith("___")}
 
     def to_embed(self):
@@ -131,6 +147,19 @@ class Activity:
             embed.add_field(name="Splitted", value="Not yet" if not self.___is_closed else f"<t:{int(self.___closed_at.timestamp())}>")
             embed.add_field(name="by", value="None" if not self.___is_closed else f"<@{self.___splitter}>")
         return embed
+
+    @staticmethod
+    def fromDict(dictionary: dict):
+        keyset = dictionary.keys()
+        attributes = [i for i in dir(Activity) if i.startswith("___")]
+        tmp_attr = map(lambda x: x.removeprefix("___"), attributes)
+        if all([i in tmp_attr for i in keyset]):
+            a = Activity()
+            for k in keyset:
+                setattr(a, "___" + k, dictionary.get(k))
+            return a
+        return None
+
 
 
 
