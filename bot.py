@@ -63,6 +63,7 @@ class AABot(discord.ext.commands.Bot):
                 self.___split_channels = json.loads(f2.read())
             except Exception as e:
                 del e
+        asyncio.ensure_future(self.clear_mem())
 
     async def on_message(self, message: discord.Message):
         author_is_not_me = message.author.name != "Albion Activities"
@@ -167,9 +168,11 @@ class AABot(discord.ext.commands.Bot):
             a = Activity(author=user_id, _type=wtd, mnp=mnp, mxp=mxp, creation_time=time_, difference=difference)
             await interaction.channel.send(embed=a.to_embed(), view=ActivityView(a))
 
-            msg_id = interaction.guild.get_channel(interaction.channel.id).last_message.id                # Getting last message (this) id
-            RUNNING_ACTIVITIES[msg_id] = a
+            msg_id = interaction.guild.get_channel(interaction.channel.id).last_message.id  # Getting last message (this) id
             a.set_creation_msg(msg_id)
+            a.set_channel(ch_id)
+            a.set_guild(guild_id)
+            RUNNING_ACTIVITIES[a.get_id()] = a
 
             asyncio.ensure_future(self.cct(guild_id, ch_id, a))
             await interaction.response.send_message("Activity created successfully.", ephemeral=True, delete_after=10)
@@ -200,6 +203,14 @@ class AABot(discord.ext.commands.Bot):
 
     async def is_guild_owner(self, interaction: discord.Interaction):
         return interaction.guild.owner_id == interaction.user.id
+
+    async def clear_mem(self):
+        global RUNNING_ACTIVITIES
+        while True:
+            await sleep(24*60*60)
+            for i in RUNNING_ACTIVITIES.keys():
+                if RUNNING_ACTIVITIES.get(i).is_closed():
+                    RUNNING_ACTIVITIES.pop(i)
 
     def begin(self):
         super().run(self.___token)
