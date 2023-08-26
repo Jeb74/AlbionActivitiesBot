@@ -171,7 +171,7 @@ class VoteSplitterSelection(discord.ui.Select):
         self.___votes[value][1] += 1
         self.___checks[1] = True
         while not all(self.___checks):
-            pass
+            sleep(5)
         else:
             await interaction.message.delete()
 
